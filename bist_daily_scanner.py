@@ -13,7 +13,7 @@ import joblib
 # E-POSTA / GMAIL KONFİGÜRASYONU
 # -------------------------------------------------------------
 SENDER_EMAIL = "alibrsharmanli@gmail.com"
-SENDER_PASSWORD = "nkfr phfx znco kmzpa"  # 16 Haneli Google Uygulama Şifren
+SENDER_PASSWORD = "zsrkhnqiauzyotxy"  # 16 Haneli Google Uygulama Şifren
 RECEIVER_EMAIL = "alibrsharmanli@gmail.com"
 # -------------------------------------------------------------
 
