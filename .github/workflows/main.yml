@@ -1,0 +1,30 @@
+name: BIST 100 Daily Quant Engine
+
+on:
+  schedule:
+    # Her gün Türkiye saati ile 18:30'da çalışır (UTC 15:30)
+    - cron: '30 15 * * *'
+  workflow_dispatch: # Manuel olarak istediğin an test edebilmeni sağlar
+
+jobs:
+  run-scanner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy scikit-learn xgboost requests joblib
+
+      - name: Run BIST Daily Scanner
+        env:
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+        run: |
+          python bist_daily_scanner.py
