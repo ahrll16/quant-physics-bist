@@ -1,13 +1,17 @@
-name: BIST 100 Daily Quant Engine
+name: BIST 100 Daily Quant Engine & Dashboard
 
 on:
   schedule:
-    # Her gün Türkiye saati ile 18:30'da çalışır (UTC 15:30)
-    - cron: '30 15 * * *'
-  workflow_dispatch: # Manuel test imkanı
+    - cron: '30 15 * * *' # Her gün TSİ 18:30
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
-  run-scanner:
+  run-scanner-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -30,3 +34,10 @@ jobs:
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
         run: |
           python bist_daily_scanner.py
+
+      - name: Deploy Page to gh-pages Branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          destination_dir: .
