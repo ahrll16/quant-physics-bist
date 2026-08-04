@@ -93,7 +93,7 @@ st.markdown("""
 
 st.title("BIST Terminali")
 
-# Standart Sektör Havuzu (Dark Horse Dışındakiler)
+# Standart Sektör Havuzu
 RAW_STOCK_CATEGORIES = {
     'BANKACILIK & FİNANS': ['AKBNK.IS', 'GARAN.IS', 'HALKB.IS', 'ISCTR.IS', 'TSKB.IS', 'VAKBN.IS', 'YKBNK.IS'],
     'ENERJİ & MADENCİLİK': ['AKSEN.IS', 'ASTOR.IS', 'CWENE.IS', 'ENJSA.IS', 'EUPWR.IS', 'GESAN.IS', 'PETKM.IS', 'TUPRS.IS'],
@@ -172,58 +172,83 @@ def fetch_and_analyze_news_live():
         fallback_html = "<ul>" + "".join([f"<li>🟡 {t}</li>" for t in raw_titles[:6]]) + "</ul>"
         return 50.0, f"<p><em>⚠️ Canlı Akış Haber Başlıkları:</em></p>{fallback_html}"
 
-# Kuantitatif Dinamik Dark Horse Tarama Motoru
+# OTONOM "NVIDIA AVCI" TAM BİST TARAMA MOTORU (Max 50 TL + Yüksek Kârlılık)
 @st.cache_data(ttl=1800)
-# Max 30 TL Uzun Vadeli Potansiyel (Dark Horse) Tarama Motoru
-@st.cache_data(ttl=1800)
-def scan_dynamic_dark_horses(news_risk_score):
-    # Geniş BIST Taraması İçin Potansiyel 30 TL Altı / Büyüme Hisseleri Havuzu
-    growth_pool = [
-        'KAREL.IS', 'INDES.IS', 'EKGYO.IS', 'SKBNK.IS', 'TSKB.IS', 
-        'TRGYO.IS', 'ODAS.IS', 'SNTRA.IS', 'KONTR.IS', 'ISGYO.IS',
-        'KRDMD.IS', 'HEKTS.IS', 'ALBRK.IS', 'VKGYO.IS', 'AKENR.IS',
-        'GWIND.IS', 'DOHOL.IS', 'MTRKS.IS', 'KLRHO.IS', 'PENTAG.IS'
-    ]
+def scan_autonomous_nvidia_candidates(news_risk_score):
+    # Tüm kategorilerdeki ve geniş BIST evrenindeki hisse sembollerini topla
+    search_universe = []
+    for cat, t_list in RAW_STOCK_CATEGORIES.items():
+        search_universe.extend(t_list)
     
-    all_symbols = list(set(growth_pool)) + ['XU100.IS']
+    # BİST'in geniş büyüme ve teknoloji/sanayi hisselerini tarama evrenine ekle
+    extra_bist = [
+        'ANSGR.IS', 'ASTOR.IS', 'BVSAN.IS', 'CWENE.IS', 'GWIND.IS', 'INDES.IS', 
+        'KAREL.IS', 'MAVI.IS', 'MIATK.IS', 'TKNSA.IS', 'EKGYO.IS', 'SKBNK.IS', 
+        'TSKB.IS', 'TRGYO.IS', 'ODAS.IS', 'SNTRA.IS', 'KONTR.IS', 'ISGYO.IS', 
+        'KRDMD.IS', 'HEKTS.IS', 'ALBRK.IS', 'VKGYO.IS', 'AKENR.IS', 'DOHOL.IS', 
+        'MTRKS.IS', 'KLRHO.IS', 'PENTAG.IS', 'EUPWR.IS', 'GESAN.IS', 'REEDR.IS', 
+        'SDTTR.IS', 'YEOTK.IS', 'AZTEK.IS', 'SMART.IS', 'HUNER.IS', 'MAGEN.IS'
+    ]
+    search_universe = list(set(search_universe + extra_bist))
+    
+    all_symbols = search_universe + ['XU100.IS']
 
     try:
         df_data = yf.download(all_symbols, period="180d")
         df_c = df_data['Close'].ffill().bfill()
         df_v = df_data['Volume'].ffill().bfill()
     except Exception:
-        # Fallback sabit liste
-        return ['EKGYO.IS', 'INDES.IS', 'KAREL.IS', 'ODAS.IS', 'SKBNK.IS', 'TRGYO.IS', 'TSKB.IS', 'ALBRK.IS', 'AKENR.IS', 'DOHOL.IS']
+        return ['INDES.IS', 'KAREL.IS', 'TSKB.IS', 'EKGYO.IS', 'DOHOL.IS', 'AKENR.IS', 'TRGYO.IS', 'SKBNK.IS', 'ODAS.IS', 'MTRKS.IS']
 
-    scored_stocks = []
+    candidates = []
 
-    for t in growth_pool:
-        if t not in df_c.columns:
+    for t in search_universe:
+        if t not in df_c.columns or t == 'XU100.IS':
             continue
         try:
             c = df_c[t]
+            v = df_v[t]
             curr_p = c.iloc[-1]
             
-            # KURAL 1: Hisse Fiyatı Max 30 TL Olmalı
-            if curr_p <= 30.0:
+            # KURAL 1: Fiyat kesinlikle 50 TL ve altında olmalı
+            if curr_p <= 50.0:
                 log_ret = np.log(c / c.shift(1)).dropna()
                 daily_drift = log_ret.iloc[-126:].mean()
                 ann_vol = log_ret.iloc[-126:].std() * np.sqrt(252)
                 
-                # Uzun vadeli Sharpe / Büyüme Potansiyeli Skoru
-                potential_score = (daily_drift * 252) / (ann_vol + 1e-9)
-                scored_stocks.append((t, potential_score, curr_p))
+                v_recent = v.iloc[-1]
+                v_avg20 = v.iloc[-21:-1].mean()
+                rvol = v_recent / (v_avg20 + 1e-9)
+                
+                # Temel Kârlılık Rasyoları Çekimi (Margin/ROE)
+                try:
+                    info = yf.Ticker(t).info
+                    profit_margin = info.get('profitMargins', 0.0) or 0.0
+                    pe_ratio = info.get('trailingPE', 99.0) or 99.0
+                except Exception:
+                    profit_margin = 0.0
+                    pe_ratio = 99.0
+
+                # Kuantitatif "Nvidia Skoru": 
+                # Büyüme Hızı (Drift) + Kâr Marjı Prim + Hacim Patlaması (RVOL) / Volatilite
+                margin_bonus = max(0.0, profit_margin * 100.0)
+                pe_discount = 10.0 / (pe_ratio + 1e-5) if 0 < pe_ratio < 30 else 0.5
+                
+                nvidia_score = ((daily_drift * 252) * 40) + (margin_bonus * 2) + (rvol * 5) + pe_discount
+                
+                if daily_drift > -0.001:  # Keskin düşüş trendinde olmasın
+                    candidates.append((t, nvidia_score, curr_p, profit_margin))
         except Exception:
             continue
 
-    # Uzun vadeli potansiyel skoruna göre sırala
-    scored_stocks.sort(key=lambda x: x[1], reverse=True)
-    selected_dark_horses = [x[0] for x in scored_stocks[:10]]
+    # En yüksek Nvidia kârlılık/büyüme skoruna sahip ilk 10 hisseyi seç
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    selected_dark_horses = [x[0] for x in candidates[:10]]
 
-    # Eğer 10 taneden az çıkarsa 30 TL altı yedeklerle tamamla
+    # 10'a tamamla
     if len(selected_dark_horses) < 10:
-        fallback_under_30 = ['TSKB.IS', 'SKBNK.IS', 'EKGYO.IS', 'INDES.IS', 'KAREL.IS', 'TRGYO.IS', 'ODAS.IS', 'ALBRK.IS', 'AKENR.IS', 'DOHOL.IS']
-        for fb in fallback_under_30:
+        fallback_under_50 = ['INDES.IS', 'KAREL.IS', 'TSKB.IS', 'EKGYO.IS', 'DOHOL.IS', 'AKENR.IS', 'TRGYO.IS', 'SKBNK.IS', 'ODAS.IS', 'MTRKS.IS']
+        for fb in fallback_under_50:
             if fb not in selected_dark_horses and len(selected_dark_horses) < 10:
                 selected_dark_horses.append(fb)
 
@@ -236,12 +261,12 @@ if st.sidebar.button("🔄 Piyasayı & Haberleri Yenile"):
 
 news_risk, news_analysis_html = fetch_and_analyze_news_live()
 
-# Dinamik Dark Horse Listesini Oluştur
-dynamic_dark_horses = scan_dynamic_dark_horses(news_risk)
+# Otonom Tarama Çalıştırılır
+dynamic_dark_horses = scan_autonomous_nvidia_candidates(news_risk)
 
-# Sektörleri Oluştur
+# Sektör Menüsü
 STOCK_CATEGORIES = {
-    '🐎 DARK HORSE (DİNAMİK AI SÜZGEÇ)': dynamic_dark_horses
+    '🐎 DARK HORSE (GELECEĞİN NVİDİA\'LARI - ≤ 50 TL)': dynamic_dark_horses
 }
 for cat in sorted(RAW_STOCK_CATEGORIES.keys()):
     STOCK_CATEGORIES[cat] = sorted(RAW_STOCK_CATEGORIES[cat])
