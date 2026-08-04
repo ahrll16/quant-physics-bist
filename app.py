@@ -172,21 +172,21 @@ def fetch_and_analyze_news_live():
         fallback_html = "<ul>" + "".join([f"<li>🟡 {t}</li>" for t in raw_titles[:6]]) + "</ul>"
         return 50.0, f"<p><em>⚠️ Canlı Akış Haber Başlıkları:</em></p>{fallback_html}"
 
-# YEOTK PROFİLİNE UYGUN (YEOTK-STYLE OUTLIER COMPOUNDER) SÜZGEÇ MOTORU
+# 6 AY - 1 YIL PEAK ODAKLI OTONOM AI TARAMA MOTORU
 @st.cache_data(ttl=1800)
-def scan_yeotk_style_outliers(news_risk_score):
+def scan_peak_outlier_stocks(news_risk_score):
     search_universe = []
     for cat, t_list in RAW_STOCK_CATEGORIES.items():
         search_universe.extend(t_list)
     
-    extra_growth = [
+    extra_candidates = [
         'YEOTK.IS', 'ANSGR.IS', 'ASTOR.IS', 'BVSAN.IS', 'CWENE.IS', 'GWIND.IS', 
         'INDES.IS', 'KAREL.IS', 'MIATK.IS', 'TKNSA.IS', 'EKGYO.IS', 'SKBNK.IS', 
         'TSKB.IS', 'TRGYO.IS', 'ODAS.IS', 'SNTRA.IS', 'KONTR.IS', 'ISGYO.IS', 
         'KRDMD.IS', 'ALBRK.IS', 'AKENR.IS', 'DOHOL.IS', 'MTRKS.IS', 'KLRHO.IS', 
         'EUPWR.IS', 'GESAN.IS', 'REEDR.IS', 'SDTTR.IS', 'HUNER.IS', 'MAGEN.IS'
     ]
-    search_universe = list(set(search_universe + extra_growth))
+    search_universe = list(set(search_universe + extra_candidates))
     all_symbols = search_universe + ['XU100.IS']
 
     try:
@@ -196,7 +196,8 @@ def scan_yeotk_style_outliers(news_risk_score):
     except Exception:
         return ['YEOTK.IS', 'INDES.IS', 'KAREL.IS', 'TSKB.IS', 'EKGYO.IS', 'DOHOL.IS', 'AKENR.IS', 'TRGYO.IS', 'SKBNK.IS', 'MTRKS.IS']
 
-    candidates = []
+    scored_candidates = []
+    macro_factor = 1.0 - ((news_risk_score - 50) / 100.0)
 
     for t in search_universe:
         if t not in df_c.columns or t == 'XU100.IS':
@@ -210,10 +211,14 @@ def scan_yeotk_style_outliers(news_risk_score):
             if curr_p <= 50.0:
                 log_ret = np.log(c / c.shift(1)).dropna()
                 
-                # Uzun Vadeli Bileşik Drift (126 Günlük Ortalama Getiri)
+                # 6 Ay ve 1 Yıl Getiri Drift İvmesi
                 daily_drift = log_ret.iloc[-126:].mean()
+                adjusted_drift = daily_drift * macro_factor
                 
-                # Relatif Güç (Endekse göre ivme)
+                # 1 Yıllık Tahmini Getiri Oranı (1Y Peak Potansiyeli)
+                target_1y = curr_p * np.exp(adjusted_drift * 252)
+                pct_1y = ((target_1y - curr_p) / curr_p) * 100.0
+
                 stock_21d_ret = (c.iloc[-1] - c.iloc[-21]) / c.iloc[-21]
                 bist_21d_ret = (df_c['XU100.IS'].iloc[-1] - df_c['XU100.IS'].iloc[-21]) / df_c['XU100.IS'].iloc[-21]
                 relative_strength = stock_21d_ret - bist_21d_ret
@@ -222,20 +227,20 @@ def scan_yeotk_style_outliers(news_risk_score):
                 v_avg20 = v.iloc[-21:-1].mean()
                 rvol = v_recent / (v_avg20 + 1e-9)
                 
-                # YEOTK Tipi İvme Skoru: Yüksek Drift + Endeks Üstü Getiri + Hacim
-                yeotk_score = (daily_drift * 1000) + (relative_strength * 50) + (rvol * 3)
+                # Peak Skoru: 1 Yıllık Yüzde Hedefi + İvme + Hacim
+                peak_score = (pct_1y * 3.0) + (relative_strength * 100.0) + (rvol * 5.0)
                 
-                # Düşüş trendinde olmayan, büyüme sinyali veren hisseler
+                # Yükseliş yönlü ivmede olan şirketler
                 if daily_drift > 0:
-                    candidates.append((t, yeotk_score, curr_p))
+                    scored_candidates.append((t, peak_score, pct_1y))
         except Exception:
             continue
 
-    # Skorlama sırasına göre YEOTK profiline uyan ilk 10 hisse
-    candidates.sort(key=lambda x: x[1], reverse=True)
-    selected_dark_horses = [x[0] for x in candidates[:10]]
+    # 1 Yıllık Peak potansiyeli ve ivmesi en yüksek olan 10 hisse
+    scored_candidates.sort(key=lambda x: x[1], reverse=True)
+    selected_dark_horses = [x[0] for x in scored_candidates[:10]]
 
-    # YEOTK'nin listede olmasını garantiye alan ve 10'a tamamlayan mekanizma
+    # YEOTK'nin listede olmasını ve 10 taneye tamamlanmasını garantiye alan yapı
     if 'YEOTK.IS' not in selected_dark_horses:
         selected_dark_horses.insert(0, 'YEOTK.IS')
         selected_dark_horses = selected_dark_horses[:10]
@@ -255,12 +260,12 @@ if st.sidebar.button("🔄 Piyasayı & Haberleri Yenile"):
 
 news_risk, news_analysis_html = fetch_and_analyze_news_live()
 
-# YEOTK Odaklı Otonom Süzgeç Motorunu Çalıştır
-dynamic_dark_horses = scan_yeotk_style_outliers(news_risk)
+# Otonom Peak Tarama Motorunu Çalıştır
+dynamic_dark_horses = scan_peak_outlier_stocks(news_risk)
 
 # Sektör Menüsü
 STOCK_CATEGORIES = {
-    '🐎 DARK HORSE (YEOTK TİPİ BÜYÜME HİSSELERİ - ≤ 50 TL)': dynamic_dark_horses
+    '🐎 DARK HORSE (PEAK & COMPOUNDER HİSSELER - ≤ 50 TL)': dynamic_dark_horses
 }
 for cat in sorted(RAW_STOCK_CATEGORIES.keys()):
     STOCK_CATEGORIES[cat] = sorted(RAW_STOCK_CATEGORIES[cat])
