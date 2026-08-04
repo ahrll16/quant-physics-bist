@@ -91,10 +91,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.title("BIST Terminali")
+st.title("📊 Quant Physics BIST Terminal")
+st.caption("BİST 100 Göreli Güç, Hacim Momentumu, Bilanço Metrikleri ve Canlı Duygu Analizi Paneli")
 
-# Sektörler ve Hisseler (A-Z Alfabetik)
+# Sektörler ve Hisseler (10 Adet Özel Dark Horse Hissesi İle)
 RAW_STOCK_CATEGORIES = {
+    '🐎 DARK HORSE (POTANSİYELİ YÜKSEK)': [
+        'ANSGR.IS', 'ASTOR.IS', 'BVSAN.IS', 'CWENE.IS', 'GWIND.IS', 
+        'INDES.IS', 'KAREL.IS', 'MAVI.IS', 'MIATK.IS', 'TKNSA.IS'
+    ],
     'BANKACILIK & FİNANS': ['AKBNK.IS', 'GARAN.IS', 'HALKB.IS', 'ISCTR.IS', 'TSKB.IS', 'VAKBN.IS', 'YKBNK.IS'],
     'ENERJİ & MADENCİLİK': ['AKSEN.IS', 'ASTOR.IS', 'CWENE.IS', 'ENJSA.IS', 'EUPWR.IS', 'GESAN.IS', 'PETKM.IS', 'TUPRS.IS'],
     'HAVACILIK & LOJİSTİK': ['ENKAI.IS', 'PGSUS.IS', 'TAVHL.IS', 'THYAO.IS'],
@@ -208,7 +213,6 @@ st.subheader("🏢 Sektörel Hisse Analizleri, Bilanço Rasyoları ve Momentum")
 selected_cat = st.selectbox("İncelemek İstediğiniz Sektörü Seçin (A-Z):", list(STOCK_CATEGORIES.keys()))
 
 tickers = STOCK_CATEGORIES[selected_cat]
-# BIST 100 Endeksini de eş zamanlı çekiyoruz (XU100.IS)
 all_symbols = tickers + ['XU100.IS']
 df_download = yf.download(all_symbols, period="300d")
 
@@ -228,17 +232,16 @@ for ticker in tickers:
     current_price = df_close[ticker].iloc[-1]
     hist_ret = log_returns[ticker]
     
-    # 1. Hacim Oranı (RVOL - Relative Volume) Hesaplaması
+    # RVOL & Relative Strength Hesaplamaları
     recent_volume = df_volume[ticker].iloc[-1]
     avg_volume_20d = df_volume[ticker].iloc[-21:-1].mean()
     rvol = recent_volume / (avg_volume_20d + 1e-9)
 
-    # 2. BIST 100 Göreli Güç (Relative Strength) Hesaplaması
     stock_21d_ret = (df_close[ticker].iloc[-1] - df_close[ticker].iloc[-21]) / df_close[ticker].iloc[-21]
     bist_21d_ret = (df_close['XU100.IS'].iloc[-1] - df_close['XU100.IS'].iloc[-21]) / df_close['XU100.IS'].iloc[-21]
     relative_strength = stock_21d_ret - bist_21d_ret
 
-    # 3. Temel Analiz & Bilanço Rasyoları (yfinance Ticker Metadata)
+    # Bilanço Metrikleri
     try:
         t_info = yf.Ticker(ticker).info
         pe_ratio = t_info.get('trailingPE', 'N/A')
@@ -271,7 +274,6 @@ for ticker in tickers:
         target_price = current_price * np.exp(expected_drift)
         pct_change = ((target_price - current_price) / current_price) * 100
 
-        # Sinyal Üretimine Hacim ve BIST 100 Göreli Güç Entegrasyonu
         if pct_change > 4 and news_risk < 65 and rsi_val < 65 and rvol > 1.0 and relative_strength > 0:
             sig = "GÜÇLÜ AL 🟢🟢"
         elif pct_change > 3 and news_risk < 65 and rsi_val < 65:
@@ -288,12 +290,10 @@ for ticker in tickers:
             "Sinyal": sig
         })
 
-    # Etiket Renklendirmeleri
     rvol_status = f"🟢 Yüksek Hacim (RVOL: {rvol:.2f})" if rvol >= 1.25 else f"🟡 Normal Hacim (RVOL: {rvol:.2f})"
     rs_status = f"🟢 BIST 100'den Güçlü (%{relative_strength*100:+.1f})" if relative_strength > 0 else f"🔴 BIST 100'den Zayıf (%{relative_strength*100:+.1f})"
 
     with st.expander(f"📌 {clean_symbol} | Fiyat: {current_price:.2f} TL | RSI: {rsi_val:.1f}", expanded=False):
-        # Bilanço ve Kuantitatif Gösterge Rozetleri
         st.markdown(f"""
         <div style="margin-bottom:12px;">
             <span class="fund-badge">📑 F/K: <strong>{pe_str}</strong></span>
