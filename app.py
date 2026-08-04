@@ -91,8 +91,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.title("📊 Quant Physics BIST Terminal")
-st.caption("Dinamik AI Dark Horse Süzgeci, BİST 100 Göreli Güç, Hacim Momentumu ve Bilanço Metrikleri")
+st.title("BIST Terminali")
 
 # Standart Sektör Havuzu (Dark Horse Dışındakiler)
 RAW_STOCK_CATEGORIES = {
@@ -175,63 +174,59 @@ def fetch_and_analyze_news_live():
 
 # Kuantitatif Dinamik Dark Horse Tarama Motoru
 @st.cache_data(ttl=1800)
+# Max 30 TL Uzun Vadeli Potansiyel (Dark Horse) Tarama Motoru
+@st.cache_data(ttl=1800)
 def scan_dynamic_dark_horses(news_risk_score):
-    # Tüm havuzdaki hisseler
-    all_pool = []
-    for cat, t_list in RAW_STOCK_CATEGORIES.items():
-        all_pool.extend(t_list)
-    all_pool = list(set(all_pool)) + ['XU100.IS']
+    # Geniş BIST Taraması İçin Potansiyel 30 TL Altı / Büyüme Hisseleri Havuzu
+    growth_pool = [
+        'KAREL.IS', 'INDES.IS', 'EKGYO.IS', 'SKBNK.IS', 'TSKB.IS', 
+        'TRGYO.IS', 'ODAS.IS', 'SNTRA.IS', 'KONTR.IS', 'ISGYO.IS',
+        'KRDMD.IS', 'HEKTS.IS', 'ALBRK.IS', 'VKGYO.IS', 'AKENR.IS',
+        'GWIND.IS', 'DOHOL.IS', 'MTRKS.IS', 'KLRHO.IS', 'PENTAG.IS'
+    ]
+    
+    all_symbols = list(set(growth_pool)) + ['XU100.IS']
 
-    df_data = yf.download(all_pool, period="180d")
-    df_c = df_data['Close'].ffill().bfill()
-    df_v = df_data['Volume'].ffill().bfill()
-    
-    bist_21d_ret = (df_c['XU100.IS'].iloc[-1] - df_c['XU100.IS'].iloc[-21]) / df_c['XU100.IS'].iloc[-21]
-    
+    try:
+        df_data = yf.download(all_symbols, period="180d")
+        df_c = df_data['Close'].ffill().bfill()
+        df_v = df_data['Volume'].ffill().bfill()
+    except Exception:
+        # Fallback sabit liste
+        return ['EKGYO.IS', 'INDES.IS', 'KAREL.IS', 'ODAS.IS', 'SKBNK.IS', 'TRGYO.IS', 'TSKB.IS', 'ALBRK.IS', 'AKENR.IS', 'DOHOL.IS']
+
     scored_stocks = []
 
-    for t in all_pool:
-        if t == 'XU100.IS':
+    for t in growth_pool:
+        if t not in df_c.columns:
             continue
         try:
             c = df_c[t]
-            v = df_v[t]
-            
             curr_p = c.iloc[-1]
-            ret_21d = (curr_p - c.iloc[-21]) / c.iloc[-21]
-            rel_strength = ret_21d - bist_21d_ret
             
-            v_recent = v.iloc[-1]
-            v_avg20 = v.iloc[-21:-1].mean()
-            rvol = v_recent / (v_avg20 + 1e-9)
-            
-            log_ret = np.log(c / c.shift(1)).dropna()
-            rsi_val = compute_rsi(log_ret).iloc[-1]
-            daily_drift = log_ret.iloc[-60:].mean()
-            
-            # Dark Horse Kriter Filtreleri:
-            # 1. BIST 100'den daha güçlü (rel_strength > 0)
-            # 2. Hacim artışı var (rvol > 1.0)
-            # 3. RSI aşırı şişkin değil ve düşüşte değil (35 < rsi < 68)
-            # 4. Günlük drift pozitif
-            if rel_strength > -0.02 and rvol > 0.9 and 35 < rsi_val < 68 and daily_drift > 0:
-                # Kuantitatif İvme Skoru
-                score = (rel_strength * 40) + (rvol * 30) + (daily_drift * 1000)
-                scored_stocks.append((t, score))
+            # KURAL 1: Hisse Fiyatı Max 30 TL Olmalı
+            if curr_p <= 30.0:
+                log_ret = np.log(c / c.shift(1)).dropna()
+                daily_drift = log_ret.iloc[-126:].mean()
+                ann_vol = log_ret.iloc[-126:].std() * np.sqrt(252)
+                
+                # Uzun vadeli Sharpe / Büyüme Potansiyeli Skoru
+                potential_score = (daily_drift * 252) / (ann_vol + 1e-9)
+                scored_stocks.append((t, potential_score, curr_p))
         except Exception:
             continue
 
-    # En yüksek puanı alan ilk 10 hisseyi sırala
+    # Uzun vadeli potansiyel skoruna göre sırala
     scored_stocks.sort(key=lambda x: x[1], reverse=True)
     selected_dark_horses = [x[0] for x in scored_stocks[:10]]
-    
-    # Eğer taramadan 10 taneden az çıkarsa yedek olarak en yüksek relatif güçlüleri tamamla
+
+    # Eğer 10 taneden az çıkarsa 30 TL altı yedeklerle tamamla
     if len(selected_dark_horses) < 10:
-        fallback_pool = ['TKFEN.IS', 'ASTOR.IS', 'MAVI.IS', 'ANSGR.IS', 'INDES.IS', 'CWENE.IS', 'ENJSA.IS', 'AKSEN.IS', 'TUPRS.IS', 'BIMAS.IS']
-        for fb in fallback_pool:
+        fallback_under_30 = ['TSKB.IS', 'SKBNK.IS', 'EKGYO.IS', 'INDES.IS', 'KAREL.IS', 'TRGYO.IS', 'ODAS.IS', 'ALBRK.IS', 'AKENR.IS', 'DOHOL.IS']
+        for fb in fallback_under_30:
             if fb not in selected_dark_horses and len(selected_dark_horses) < 10:
                 selected_dark_horses.append(fb)
-                
+
     return sorted(selected_dark_horses)
 
 # Yan Menü Kontrolü
