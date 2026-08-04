@@ -3,7 +3,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import joblib
 import requests
 import xml.etree.ElementTree as ET
 
@@ -12,24 +11,26 @@ try:
 except ImportError:
     genai = None
 
-# Streamlit Sayfa Konfigürasyonu
+# Streamlit Sayfa Ayarları
 st.set_page_config(
-    page_title="Quant BIST & AI Terminal",
+    page_title="Quant BIST & Gemini AI Terminal",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Koyu Tema CSS Stili
+# Koyu Finans Terminali CSS
 st.markdown("""
 <style>
-    .main { background-color: #0e1117; }
-    .stMetric { background-color: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
+    .main { background-color: #0f172a; color: #f8fafc; }
+    .stMetric { background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
     .disclaimer-box { background-color: #1e1b4b; border: 1px solid #4338ca; border-radius: 8px; padding: 12px; margin-bottom: 20px; color: #cbd5e1; font-size: 13px; }
+    .news-box { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 18px; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
+    .stock-card { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; margin-top: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
-# Yasal Uyarı Paneli (En Üstte Sabit)
+# Yasal Uyarı
 st.markdown("""
 <div class="disclaimer-box">
     <strong>⚖️ YASAL UYARI:</strong> Bu web sitesinde sunulan yapay zeka duygu analizleri, makine öğrenimi tahminleri ve kuantitatif veriler 
@@ -52,9 +53,14 @@ STOCK_CATEGORIES = {
     'İLETİŞİM': ['TCELL.IS', 'TTKOM.IS']
 }
 
-ALL_TICKERS = sorted([ticker for group in STOCK_CATEGORIES.values() for ticker in group])
+def compute_rsi(series, window=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / (loss + 1e-9)
+    return 100 - (100 / (1 + rs))
 
-@st.cache_data(ttl=1800) # 30 dakikada bir veya yenile butonunda haber çeker
+@st.cache_data(ttl=1800)
 def fetch_and_analyze_news_live():
     rss_urls = [
         "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en",
@@ -77,7 +83,7 @@ def fetch_and_analyze_news_live():
 
     api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
     if not api_key or not genai:
-        return 50.0, "Yapay Zeka API Anahtarı tanımlanmadı."
+        return 50.0, "<p>Yapay Zeka API Anahtarı bulunamadı veya google-genai modülü eksik.</p>"
 
     all_titles_text = "\n".join([f"- {t}" for t in raw_titles])
 
@@ -86,67 +92,110 @@ def fetch_and_analyze_news_live():
     Aşağıda son haber başlıkları bulunmaktadır:
     {all_titles_text}
 
-    BIST 100 üzerindeki etkisi en yüksek olan 5-8 kritik haberi seç ve Türkçe özeti ile [POZİTİF 🟢 / NEGATİF 🔴 / NÖTR 🟡] olarak değerlendir.
-    En son satıra 'RISK_SCORE: [sayı]' yaz (0-100 arası).
+    GÖREVİN:
+    1. BIST 100 üzerindeki etkisi en yüksek olan 5-8 kritik haberi seç.
+    2. Türkçe özet ile [POZİTİF 🟢 / NEGATİF 🔴 / NÖTR 🟡] etiketli HTML liste özetini üret (<ul> ve <li> kullanarak).
+    3. Sayfanın en son satırına 'RISK_SCORE: [sayı]' yaz (0-100 arası).
     """
 
-    try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
-        output = response.text.strip()
-        score = 50.0
-        if "RISK_SCORE:" in output:
-            parts = output.rsplit("RISK_SCORE:", 1)
-            output_text = parts[0].strip()
-            try:
-                score = float(parts[1].strip().split()[0])
-            except ValueError:
-                score = 50.0
-            return score, output_text
-        return 50.0, output
-    except Exception as e:
-        return 50.0, f"Yapay Zeka Analiz Hatası: {e}"
+    # Model ismi güncel 'gemini-1.5-flash' veya 'gemini-2.0-flash' olarak güncellendi
+    for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash']:
+        try:
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            output = response.text.strip()
+            score = 50.0
+            if "RISK_SCORE:" in output:
+                parts = output.rsplit("RISK_SCORE:", 1)
+                output_text = parts[0].strip()
+                try:
+                    score = float(parts[1].strip().split()[0])
+                except ValueError:
+                    score = 50.0
+                return score, output_text
+            return 50.0, output
+        except Exception:
+            continue
 
-# Yan Menü & Canlı Yenileme
-st.sidebar.header("⚙️ Terminal Paneli")
-if st.sidebar.button("🔄 Piyasayı & Haberleri Anlık Yenile"):
+    return 50.0, "<p>Yapay zeka analiz modeli yanıt vermedi.</p>"
+
+# Yan Menü
+st.sidebar.header("⚙️ Terminal Ayarları")
+if st.sidebar.button("🔄 Piyasayı & Haberleri Canlı Yenile"):
     st.cache_data.clear()
 
-news_risk, news_analysis = fetch_and_analyze_news_live()
+news_risk, news_analysis_html = fetch_and_analyze_news_live()
 
-# Üst Özet Metrikleri
+# Üst Metrik Kartları
 col1, col2, col3 = st.columns(3)
-col1.metric("🧠 Yapay Zeka Haber Risk Skoru", f"%{news_risk:.1f}")
+col1.metric("🧠 Gemini AI Haber Risk Skoru", f"%{news_risk:.1f}")
 col2.metric("📊 Önerilen Hisse Ağırlığı", f"%{100.0 - news_risk:.1f}")
 col3.metric("💵 Önerilen Nakit Ağırlığı", f"%{news_risk:.1f}")
 
 st.markdown("---")
 
-# Gemini AI Haber Süzgeci Sekmesi
-with st.expander("🌍 Gemini AI Süzgecinden Geçen Canlı Küresel & Yerel Haber Analizi", expanded=True):
-    st.markdown(news_analysis)
+# Haber Süzgeci Sekmesi (HTML Destekli)
+st.subheader("🌍 Gemini AI Süzgecinden Geçen Canlı Küresel & Yerel Haber Analizi")
+st.markdown(f'<div class="news-box">{news_analysis_html}</div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.subheader("🏢 Sektörel Hisse Analizleri ve Kuantitatif Sinyaller")
+st.subheader("🏢 Sektörel Hisse Analizleri ve Çoklu Zaman Dilimi Hedefleri")
 
-selected_cat = st.selectbox("İncelemek İstediğiniz Sektörü Seçin:", list(STOCK_CATEGORIES.keys()))
+selected_cat = st.selectbox("İncelemek İstediğiniz Sektörü Seçin:", sorted(list(STOCK_CATEGORIES.keys())))
 
-tickers = STOCK_CATEGORIES[selected_cat]
-df_data = yf.download(tickers, period="60d")['Close'].ffill().bfill()
+tickers = sorted(STOCK_CATEGORIES[selected_cat])
+df_bist = yf.download(tickers, period="300d")['Close'].ffill().bfill()
+log_returns = np.log(df_bist / df_bist.shift(1)).dropna()
 
-stock_summary = []
-for t in tickers:
-    clean_t = t.replace('.IS', '')
-    last_price = df_data[t].iloc[-1]
-    ret_21d = (df_data[t].iloc[-1] - df_data[t].iloc[-21]) / df_data[t].iloc[-21] * 100
-    stock_summary.append({
-        "Hisse": clean_t,
-        "Son Fiyat (TL)": f"{last_price:.2f}",
-        "21 Günlük Değişim": f"%{ret_21d:+.2f}",
-        "Sistem Sinyali": "DENGELİ / TUT" if news_risk < 60 else "KORUMALI / NAKİT"
-    })
+timeframes = {
+    'Günlük': 1, 'Haftalık': 5, 'Aylık': 21,
+    '3 Aylık': 63, '6 Aylık': 126, '1 Yıllık': 252,
+    '2 Yıllık': 504, '3 Yıllık': 756
+}
 
-st.table(pd.DataFrame(stock_summary))
+for ticker in tickers:
+    clean_symbol = ticker.replace('.IS', '')
+    current_price = df_bist[ticker].iloc[-1]
+    hist_ret = log_returns[ticker]
+
+    ann_vol = hist_ret.iloc[-126:].std() * np.sqrt(252)
+    daily_drift = hist_ret.iloc[-126:].mean()
+    rsi_val = compute_rsi(hist_ret).iloc[-1]
+
+    macro_sentiment_factor = 1.0 - ((news_risk - 50) / 100.0)
+    adjusted_daily_drift = daily_drift * macro_sentiment_factor
+
+    tf_data = []
+    for tf_name, days in timeframes.items():
+        if days <= 252:
+            expected_drift = adjusted_daily_drift * days
+        else:
+            years = days / 252
+            bank_cagr = 0.35 * macro_sentiment_factor
+            expected_drift = np.log((1 + bank_cagr) ** years)
+
+        vol_period = ann_vol * np.sqrt(days / 252) * 100
+        target_price = current_price * np.exp(expected_drift)
+        pct_change = ((target_price - current_price) / current_price) * 100
+
+        if pct_change > 4 and news_risk < 65 and rsi_val < 65:
+            sig = "AL / Yüksek Potansiyel 🟢"
+        elif pct_change < -3 or news_risk > 70 or rsi_val > 70:
+            sig = "SAT / Riskli & Nakit 🔴"
+        else:
+            sig = "TUT / Dengeli Pozisyon 🟡"
+
+        tf_data.append({
+            "Zaman Dilimi": tf_name,
+            "Beklenen Oynaklık": f"%{vol_period:.2f}",
+            "Tahmini Fiyat (% Hedef)": f"{target_price:.2f} TL ({pct_change:+.2f}%)",
+            "Tazelenmiş Sinyal": sig,
+            "Sistem Notu": "AI Akış Düzeltmeli"
+        })
+
+    # Her hisse için detaylı kart ve e-postadaki gibi zengin tablo gösterimi
+    with st.expander(f"📌 {clean_symbol} | Fiyat: {current_price:.2f} TL | RSI: {rsi_val:.1f}", expanded=True):
+        st.table(pd.DataFrame(tf_data))
