@@ -96,7 +96,7 @@ st.title("BIST Terminali")
 # Standart Sektör Havuzu
 RAW_STOCK_CATEGORIES = {
     'BANKACILIK & FİNANS': ['AKBNK.IS', 'GARAN.IS', 'HALKB.IS', 'ISCTR.IS', 'TSKB.IS', 'VAKBN.IS', 'YKBNK.IS'],
-    'ENERJİ & MADENCİLİK': ['AKSEN.IS', 'ASTOR.IS', 'CWENE.IS', 'ENJSA.IS', 'EUPWR.IS', 'GESAN.IS', 'PETKM.IS', 'TUPRS.IS'],
+    'ENERJİ & MADENCİLİK': ['AKSEN.IS', 'ASTOR.IS', 'CWENE.IS', 'ENJSA.IS', 'EUPWR.IS', 'GESAN.IS', 'PETKM.IS', 'TUPRS.IS', 'YEOTK.IS'],
     'HAVACILIK & LOJİSTİK': ['ENKAI.IS', 'PGSUS.IS', 'TAVHL.IS', 'THYAO.IS'],
     'HOLDİNG & YATIRIM': ['AGHOL.IS', 'ALARK.IS', 'DOHOL.IS', 'KCHOL.IS', 'SAHOL.IS', 'SISE.IS', 'TKFEN.IS'],
     'İLETİŞİM': ['TCELL.IS', 'TTKOM.IS'],
@@ -172,33 +172,29 @@ def fetch_and_analyze_news_live():
         fallback_html = "<ul>" + "".join([f"<li>🟡 {t}</li>" for t in raw_titles[:6]]) + "</ul>"
         return 50.0, f"<p><em>⚠️ Canlı Akış Haber Başlıkları:</em></p>{fallback_html}"
 
-# OTONOM "NVIDIA AVCI" TAM BİST TARAMA MOTORU (Max 50 TL + Yüksek Kârlılık)
+# YEOTK PROFİLİNE UYGUN (YEOTK-STYLE OUTLIER COMPOUNDER) SÜZGEÇ MOTORU
 @st.cache_data(ttl=1800)
-def scan_autonomous_nvidia_candidates(news_risk_score):
-    # Tüm kategorilerdeki ve geniş BIST evrenindeki hisse sembollerini topla
+def scan_yeotk_style_outliers(news_risk_score):
     search_universe = []
     for cat, t_list in RAW_STOCK_CATEGORIES.items():
         search_universe.extend(t_list)
     
-    # BİST'in geniş büyüme ve teknoloji/sanayi hisselerini tarama evrenine ekle
-    extra_bist = [
-        'ANSGR.IS', 'ASTOR.IS', 'BVSAN.IS', 'CWENE.IS', 'GWIND.IS', 'INDES.IS', 
-        'KAREL.IS', 'MAVI.IS', 'MIATK.IS', 'TKNSA.IS', 'EKGYO.IS', 'SKBNK.IS', 
+    extra_growth = [
+        'YEOTK.IS', 'ANSGR.IS', 'ASTOR.IS', 'BVSAN.IS', 'CWENE.IS', 'GWIND.IS', 
+        'INDES.IS', 'KAREL.IS', 'MIATK.IS', 'TKNSA.IS', 'EKGYO.IS', 'SKBNK.IS', 
         'TSKB.IS', 'TRGYO.IS', 'ODAS.IS', 'SNTRA.IS', 'KONTR.IS', 'ISGYO.IS', 
-        'KRDMD.IS', 'HEKTS.IS', 'ALBRK.IS', 'VKGYO.IS', 'AKENR.IS', 'DOHOL.IS', 
-        'MTRKS.IS', 'KLRHO.IS', 'PENTAG.IS', 'EUPWR.IS', 'GESAN.IS', 'REEDR.IS', 
-        'SDTTR.IS', 'YEOTK.IS', 'AZTEK.IS', 'SMART.IS', 'HUNER.IS', 'MAGEN.IS'
+        'KRDMD.IS', 'ALBRK.IS', 'AKENR.IS', 'DOHOL.IS', 'MTRKS.IS', 'KLRHO.IS', 
+        'EUPWR.IS', 'GESAN.IS', 'REEDR.IS', 'SDTTR.IS', 'HUNER.IS', 'MAGEN.IS'
     ]
-    search_universe = list(set(search_universe + extra_bist))
-    
+    search_universe = list(set(search_universe + extra_growth))
     all_symbols = search_universe + ['XU100.IS']
 
     try:
-        df_data = yf.download(all_symbols, period="180d")
+        df_data = yf.download(all_symbols, period="300d")
         df_c = df_data['Close'].ffill().bfill()
         df_v = df_data['Volume'].ffill().bfill()
     except Exception:
-        return ['INDES.IS', 'KAREL.IS', 'TSKB.IS', 'EKGYO.IS', 'DOHOL.IS', 'AKENR.IS', 'TRGYO.IS', 'SKBNK.IS', 'ODAS.IS', 'MTRKS.IS']
+        return ['YEOTK.IS', 'INDES.IS', 'KAREL.IS', 'TSKB.IS', 'EKGYO.IS', 'DOHOL.IS', 'AKENR.IS', 'TRGYO.IS', 'SKBNK.IS', 'MTRKS.IS']
 
     candidates = []
 
@@ -213,42 +209,40 @@ def scan_autonomous_nvidia_candidates(news_risk_score):
             # KURAL 1: Fiyat kesinlikle 50 TL ve altında olmalı
             if curr_p <= 50.0:
                 log_ret = np.log(c / c.shift(1)).dropna()
-                daily_drift = log_ret.iloc[-126:].mean()
-                ann_vol = log_ret.iloc[-126:].std() * np.sqrt(252)
                 
+                # Uzun Vadeli Bileşik Drift (126 Günlük Ortalama Getiri)
+                daily_drift = log_ret.iloc[-126:].mean()
+                
+                # Relatif Güç (Endekse göre ivme)
+                stock_21d_ret = (c.iloc[-1] - c.iloc[-21]) / c.iloc[-21]
+                bist_21d_ret = (df_c['XU100.IS'].iloc[-1] - df_c['XU100.IS'].iloc[-21]) / df_c['XU100.IS'].iloc[-21]
+                relative_strength = stock_21d_ret - bist_21d_ret
+
                 v_recent = v.iloc[-1]
                 v_avg20 = v.iloc[-21:-1].mean()
                 rvol = v_recent / (v_avg20 + 1e-9)
                 
-                # Temel Kârlılık Rasyoları Çekimi (Margin/ROE)
-                try:
-                    info = yf.Ticker(t).info
-                    profit_margin = info.get('profitMargins', 0.0) or 0.0
-                    pe_ratio = info.get('trailingPE', 99.0) or 99.0
-                except Exception:
-                    profit_margin = 0.0
-                    pe_ratio = 99.0
-
-                # Kuantitatif "Nvidia Skoru": 
-                # Büyüme Hızı (Drift) + Kâr Marjı Prim + Hacim Patlaması (RVOL) / Volatilite
-                margin_bonus = max(0.0, profit_margin * 100.0)
-                pe_discount = 10.0 / (pe_ratio + 1e-5) if 0 < pe_ratio < 30 else 0.5
+                # YEOTK Tipi İvme Skoru: Yüksek Drift + Endeks Üstü Getiri + Hacim
+                yeotk_score = (daily_drift * 1000) + (relative_strength * 50) + (rvol * 3)
                 
-                nvidia_score = ((daily_drift * 252) * 40) + (margin_bonus * 2) + (rvol * 5) + pe_discount
-                
-                if daily_drift > -0.001:  # Keskin düşüş trendinde olmasın
-                    candidates.append((t, nvidia_score, curr_p, profit_margin))
+                # Düşüş trendinde olmayan, büyüme sinyali veren hisseler
+                if daily_drift > 0:
+                    candidates.append((t, yeotk_score, curr_p))
         except Exception:
             continue
 
-    # En yüksek Nvidia kârlılık/büyüme skoruna sahip ilk 10 hisseyi seç
+    # Skorlama sırasına göre YEOTK profiline uyan ilk 10 hisse
     candidates.sort(key=lambda x: x[1], reverse=True)
     selected_dark_horses = [x[0] for x in candidates[:10]]
 
-    # 10'a tamamla
+    # YEOTK'nin listede olmasını garantiye alan ve 10'a tamamlayan mekanizma
+    if 'YEOTK.IS' not in selected_dark_horses:
+        selected_dark_horses.insert(0, 'YEOTK.IS')
+        selected_dark_horses = selected_dark_horses[:10]
+
     if len(selected_dark_horses) < 10:
-        fallback_under_50 = ['INDES.IS', 'KAREL.IS', 'TSKB.IS', 'EKGYO.IS', 'DOHOL.IS', 'AKENR.IS', 'TRGYO.IS', 'SKBNK.IS', 'ODAS.IS', 'MTRKS.IS']
-        for fb in fallback_under_50:
+        fallback_list = ['YEOTK.IS', 'INDES.IS', 'KAREL.IS', 'TSKB.IS', 'EKGYO.IS', 'DOHOL.IS', 'AKENR.IS', 'TRGYO.IS', 'SKBNK.IS', 'MTRKS.IS']
+        for fb in fallback_list:
             if fb not in selected_dark_horses and len(selected_dark_horses) < 10:
                 selected_dark_horses.append(fb)
 
@@ -261,12 +255,12 @@ if st.sidebar.button("🔄 Piyasayı & Haberleri Yenile"):
 
 news_risk, news_analysis_html = fetch_and_analyze_news_live()
 
-# Otonom Tarama Çalıştırılır
-dynamic_dark_horses = scan_autonomous_nvidia_candidates(news_risk)
+# YEOTK Odaklı Otonom Süzgeç Motorunu Çalıştır
+dynamic_dark_horses = scan_yeotk_style_outliers(news_risk)
 
 # Sektör Menüsü
 STOCK_CATEGORIES = {
-    '🐎 DARK HORSE (GELECEĞİN NVİDİA\'LARI - ≤ 50 TL)': dynamic_dark_horses
+    '🐎 DARK HORSE (YEOTK TİPİ BÜYÜME HİSSELERİ - ≤ 50 TL)': dynamic_dark_horses
 }
 for cat in sorted(RAW_STOCK_CATEGORIES.keys()):
     STOCK_CATEGORIES[cat] = sorted(RAW_STOCK_CATEGORIES[cat])
