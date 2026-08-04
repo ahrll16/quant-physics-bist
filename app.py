@@ -182,13 +182,20 @@ if st.sidebar.button("🔄 Piyasayı & Haberleri Yenile"):
 
 news_risk, news_analysis_html = fetch_and_analyze_news_live()
 
-# Üst Metrik Kartları
+# Üst Metrik Kartları ve Kısa Açıklamaları
 col1, col2, col3 = st.columns(3)
-col1.metric("🧠 Makro Haber Risk Skoru", f"%{news_risk:.1f}")
-col2.metric("📊 Önerilen Hisse Ağırlığı", f"%{100.0 - news_risk:.1f}")
-col3.metric("💵 Önerilen Nakit Ağırlığı", f"%{news_risk:.1f}")
 
-st.markdown("---")
+with col1:
+    st.metric("🧠 Makro Haber Risk Skoru", f"%{news_risk:.1f}")
+    st.caption("Piyasa haberlerinin yapay zeka tarafından hesaplanan genel risk ve duygu seviyesidir.")
+
+with col2:
+    st.metric("📊 Önerilen Hisse Ağırlığı", f"%{100.0 - news_risk:.1f}")
+    st.caption("Mevcut makro risk seviyesine göre portföyde tutulması önerilen toplam hisse oranıdır.")
+
+with col3:
+    st.metric("💵 Önerilen Nakit Ağırlığı", f"%{news_risk:.1f}")
+    st.caption("Olası dalgalanmalardan korunmak ve fırsat kollamak için önerilen nakit/likit oranını simgeler.")
 
 # Haber Analizi Sekmesi
 st.subheader("🌍 Canlı Küresel & Yerel Piyasa Haber Analizi")
