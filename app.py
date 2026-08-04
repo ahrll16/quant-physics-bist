@@ -92,14 +92,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 Quant Physics BIST Terminal")
-st.caption("BİST 100 Göreli Güç, Hacim Momentumu, Bilanço Metrikleri ve Canlı Duygu Analizi Paneli")
+st.caption("Dinamik AI Dark Horse Süzgeci, BİST 100 Göreli Güç, Hacim Momentumu ve Bilanço Metrikleri")
 
-# Sektörler ve Hisseler (10 Adet Özel Dark Horse Hissesi İle)
+# Standart Sektör Havuzu (Dark Horse Dışındakiler)
 RAW_STOCK_CATEGORIES = {
-    '🐎 DARK HORSE (POTANSİYELİ YÜKSEK)': [
-        'ANSGR.IS', 'ASTOR.IS', 'BVSAN.IS', 'CWENE.IS', 'GWIND.IS', 
-        'INDES.IS', 'KAREL.IS', 'MAVI.IS', 'MIATK.IS', 'TKNSA.IS'
-    ],
     'BANKACILIK & FİNANS': ['AKBNK.IS', 'GARAN.IS', 'HALKB.IS', 'ISCTR.IS', 'TSKB.IS', 'VAKBN.IS', 'YKBNK.IS'],
     'ENERJİ & MADENCİLİK': ['AKSEN.IS', 'ASTOR.IS', 'CWENE.IS', 'ENJSA.IS', 'EUPWR.IS', 'GESAN.IS', 'PETKM.IS', 'TUPRS.IS'],
     'HAVACILIK & LOJİSTİK': ['ENKAI.IS', 'PGSUS.IS', 'TAVHL.IS', 'THYAO.IS'],
@@ -109,11 +105,6 @@ RAW_STOCK_CATEGORIES = {
     'OTOMOTİV & SANAYİ': ['ARCLK.IS', 'BRISA.IS', 'DOAS.IS', 'FROTO.IS', 'OTKAR.IS', 'TOASO.IS', 'VESBE.IS'],
     'PERAKENDE & GIDA': ['AEFES.IS', 'BIMAS.IS', 'CCOLA.IS', 'MGROS.IS', 'SOKM.IS', 'ULKER.IS'],
     'SAVUNMA & TEKNOLOJİ': ['ASELS.IS', 'KONTR.IS', 'MIATK.IS', 'REEDR.IS', 'SDTTR.IS']
-}
-
-STOCK_CATEGORIES = {
-    cat: sorted(RAW_STOCK_CATEGORIES[cat]) 
-    for cat in sorted(RAW_STOCK_CATEGORIES.keys())
 }
 
 def compute_rsi(series, window=14):
@@ -182,12 +173,83 @@ def fetch_and_analyze_news_live():
         fallback_html = "<ul>" + "".join([f"<li>🟡 {t}</li>" for t in raw_titles[:6]]) + "</ul>"
         return 50.0, f"<p><em>⚠️ Canlı Akış Haber Başlıkları:</em></p>{fallback_html}"
 
+# Kuantitatif Dinamik Dark Horse Tarama Motoru
+@st.cache_data(ttl=1800)
+def scan_dynamic_dark_horses(news_risk_score):
+    # Tüm havuzdaki hisseler
+    all_pool = []
+    for cat, t_list in RAW_STOCK_CATEGORIES.items():
+        all_pool.extend(t_list)
+    all_pool = list(set(all_pool)) + ['XU100.IS']
+
+    df_data = yf.download(all_pool, period="180d")
+    df_c = df_data['Close'].ffill().bfill()
+    df_v = df_data['Volume'].ffill().bfill()
+    
+    bist_21d_ret = (df_c['XU100.IS'].iloc[-1] - df_c['XU100.IS'].iloc[-21]) / df_c['XU100.IS'].iloc[-21]
+    
+    scored_stocks = []
+
+    for t in all_pool:
+        if t == 'XU100.IS':
+            continue
+        try:
+            c = df_c[t]
+            v = df_v[t]
+            
+            curr_p = c.iloc[-1]
+            ret_21d = (curr_p - c.iloc[-21]) / c.iloc[-21]
+            rel_strength = ret_21d - bist_21d_ret
+            
+            v_recent = v.iloc[-1]
+            v_avg20 = v.iloc[-21:-1].mean()
+            rvol = v_recent / (v_avg20 + 1e-9)
+            
+            log_ret = np.log(c / c.shift(1)).dropna()
+            rsi_val = compute_rsi(log_ret).iloc[-1]
+            daily_drift = log_ret.iloc[-60:].mean()
+            
+            # Dark Horse Kriter Filtreleri:
+            # 1. BIST 100'den daha güçlü (rel_strength > 0)
+            # 2. Hacim artışı var (rvol > 1.0)
+            # 3. RSI aşırı şişkin değil ve düşüşte değil (35 < rsi < 68)
+            # 4. Günlük drift pozitif
+            if rel_strength > -0.02 and rvol > 0.9 and 35 < rsi_val < 68 and daily_drift > 0:
+                # Kuantitatif İvme Skoru
+                score = (rel_strength * 40) + (rvol * 30) + (daily_drift * 1000)
+                scored_stocks.append((t, score))
+        except Exception:
+            continue
+
+    # En yüksek puanı alan ilk 10 hisseyi sırala
+    scored_stocks.sort(key=lambda x: x[1], reverse=True)
+    selected_dark_horses = [x[0] for x in scored_stocks[:10]]
+    
+    # Eğer taramadan 10 taneden az çıkarsa yedek olarak en yüksek relatif güçlüleri tamamla
+    if len(selected_dark_horses) < 10:
+        fallback_pool = ['TKFEN.IS', 'ASTOR.IS', 'MAVI.IS', 'ANSGR.IS', 'INDES.IS', 'CWENE.IS', 'ENJSA.IS', 'AKSEN.IS', 'TUPRS.IS', 'BIMAS.IS']
+        for fb in fallback_pool:
+            if fb not in selected_dark_horses and len(selected_dark_horses) < 10:
+                selected_dark_horses.append(fb)
+                
+    return sorted(selected_dark_horses)
+
 # Yan Menü Kontrolü
 st.sidebar.header("⚙️ Terminal Kontrolü")
 if st.sidebar.button("🔄 Piyasayı & Haberleri Yenile"):
     st.cache_data.clear()
 
 news_risk, news_analysis_html = fetch_and_analyze_news_live()
+
+# Dinamik Dark Horse Listesini Oluştur
+dynamic_dark_horses = scan_dynamic_dark_horses(news_risk)
+
+# Sektörleri Oluştur
+STOCK_CATEGORIES = {
+    '🐎 DARK HORSE (DİNAMİK AI SÜZGEÇ)': dynamic_dark_horses
+}
+for cat in sorted(RAW_STOCK_CATEGORIES.keys()):
+    STOCK_CATEGORIES[cat] = sorted(RAW_STOCK_CATEGORIES[cat])
 
 # Üst Metrik Kartları
 col1, col2, col3 = st.columns(3)
