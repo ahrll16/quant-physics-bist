@@ -37,8 +37,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.title("📊 Quant Physics BIST Terminal")
-st.caption("Küresel Makro Veriler, Piyasa Duygu Analizi ve Kuantitatif Hisse Modellemesi")
+st.title("📊 BIST Terminali")
 
 # Sektörler ve Hisseler (A-Z Alfabetik Düzenleme)
 RAW_STOCK_CATEGORIES = {
