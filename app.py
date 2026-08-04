@@ -11,7 +11,7 @@ try:
 except ImportError:
     genai = None
 
-# Streamlit Sayfa Ayarları
+# Streamlit Sayfa Konfigürasyonu
 st.set_page_config(
     page_title="Quant Physics BIST Terminal",
     page_icon="📊",
@@ -22,7 +22,6 @@ st.set_page_config(
 # Mobil Uyumlu ve Sabit Koyu Tema CSS
 st.markdown("""
 <style>
-    /* Global Koyu Tema */
     html, body, [data-testid="stAppViewContainer"] {
         background-color: #0f172a !important;
         color: #f8fafc !important;
@@ -32,7 +31,6 @@ st.markdown("""
         background-color: #020617 !important;
     }
     
-    /* Metrik Kutuları */
     .stMetric { 
         background-color: #1e293b !important; 
         padding: 12px; 
@@ -41,7 +39,6 @@ st.markdown("""
         margin-bottom: 10px;
     }
     
-    /* Mobil & Web İçin Özel Kutular */
     .disclaimer-box { 
         background-color: #1e1b4b !important; 
         border: 1px solid #4338ca !important; 
@@ -65,20 +62,17 @@ st.markdown("""
         overflow-x: auto;
     }
 
-    /* Tablo ve Kart Düzenleri */
-    .timeframe-card {
-        background-color: #1e293b;
+    .fund-badge {
+        background-color: #0f172a;
         border: 1px solid #334155;
         border-radius: 6px;
-        padding: 10px 14px;
+        padding: 6px 12px;
+        margin-right: 8px;
         margin-bottom: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 13px;
+        display: inline-block;
+        font-size: 12px;
     }
 
-    /* Mobil Ekran Özelleştirmeleri (Media Query) */
     @media (max-width: 768px) {
         .stMetric { padding: 10px; }
         .stMetric [data-testid="stMetricValue"] { font-size: 1.3rem !important; }
@@ -99,7 +93,7 @@ st.markdown("""
 
 st.title("BIST Terminali")
 
-# Sektörler ve Hisseler (A-Z Alfabetik Sıralı)
+# Sektörler ve Hisseler (A-Z Alfabetik)
 RAW_STOCK_CATEGORIES = {
     'BANKACILIK & FİNANS': ['AKBNK.IS', 'GARAN.IS', 'HALKB.IS', 'ISCTR.IS', 'TSKB.IS', 'VAKBN.IS', 'YKBNK.IS'],
     'ENERJİ & MADENCİLİK': ['AKSEN.IS', 'ASTOR.IS', 'CWENE.IS', 'ENJSA.IS', 'EUPWR.IS', 'GESAN.IS', 'PETKM.IS', 'TUPRS.IS'],
@@ -183,7 +177,7 @@ def fetch_and_analyze_news_live():
         fallback_html = "<ul>" + "".join([f"<li>🟡 {t}</li>" for t in raw_titles[:6]]) + "</ul>"
         return 50.0, f"<p><em>⚠️ Canlı Akış Haber Başlıkları:</em></p>{fallback_html}"
 
-# Yan Menü
+# Yan Menü Kontrolü
 st.sidebar.header("⚙️ Terminal Kontrolü")
 if st.sidebar.button("🔄 Piyasayı & Haberleri Yenile"):
     st.cache_data.clear()
@@ -192,15 +186,12 @@ news_risk, news_analysis_html = fetch_and_analyze_news_live()
 
 # Üst Metrik Kartları
 col1, col2, col3 = st.columns(3)
-
 with col1:
     st.metric("🧠 Makro Risk Skoru", f"%{news_risk:.1f}")
     st.caption("Piyasa haberlerinin hesaplanan risk seviyesi.")
-
 with col2:
     st.metric("📊 Hisse Ağırlığı", f"%{100.0 - news_risk:.1f}")
     st.caption("Portföyde tutulması önerilen hisse oranı.")
-
 with col3:
     st.metric("💵 Nakit Ağırlığı", f"%{news_risk:.1f}")
     st.caption("Piyasa riskine karşı önerilen nakit oranı.")
@@ -212,13 +203,19 @@ st.subheader("🌍 Canlı Küresel & Yerel Piyasa Haber Analizi")
 st.markdown(f'<div class="news-box">{news_analysis_html}</div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.subheader("🏢 Sektörel Hisse Analizleri ve Hedefler")
+st.subheader("🏢 Sektörel Hisse Analizleri, Bilanço Rasyoları ve Momentum")
 
 selected_cat = st.selectbox("İncelemek İstediğiniz Sektörü Seçin (A-Z):", list(STOCK_CATEGORIES.keys()))
 
 tickers = STOCK_CATEGORIES[selected_cat]
-df_bist = yf.download(tickers, period="300d")['Close'].ffill().bfill()
-log_returns = np.log(df_bist / df_bist.shift(1)).dropna()
+# BIST 100 Endeksini de eş zamanlı çekiyoruz (XU100.IS)
+all_symbols = tickers + ['XU100.IS']
+df_download = yf.download(all_symbols, period="300d")
+
+df_close = df_download['Close'].ffill().bfill()
+df_volume = df_download['Volume'].ffill().bfill()
+
+log_returns = np.log(df_close / df_close.shift(1)).dropna()
 
 timeframes = {
     'Günlük': 1, 'Haftalık': 5, 'Aylık': 21,
@@ -228,8 +225,31 @@ timeframes = {
 
 for ticker in tickers:
     clean_symbol = ticker.replace('.IS', '')
-    current_price = df_bist[ticker].iloc[-1]
+    current_price = df_close[ticker].iloc[-1]
     hist_ret = log_returns[ticker]
+    
+    # 1. Hacim Oranı (RVOL - Relative Volume) Hesaplaması
+    recent_volume = df_volume[ticker].iloc[-1]
+    avg_volume_20d = df_volume[ticker].iloc[-21:-1].mean()
+    rvol = recent_volume / (avg_volume_20d + 1e-9)
+
+    # 2. BIST 100 Göreli Güç (Relative Strength) Hesaplaması
+    stock_21d_ret = (df_close[ticker].iloc[-1] - df_close[ticker].iloc[-21]) / df_close[ticker].iloc[-21]
+    bist_21d_ret = (df_close['XU100.IS'].iloc[-1] - df_close['XU100.IS'].iloc[-21]) / df_close['XU100.IS'].iloc[-21]
+    relative_strength = stock_21d_ret - bist_21d_ret
+
+    # 3. Temel Analiz & Bilanço Rasyoları (yfinance Ticker Metadata)
+    try:
+        t_info = yf.Ticker(ticker).info
+        pe_ratio = t_info.get('trailingPE', 'N/A')
+        pb_ratio = t_info.get('priceToBook', 'N/A')
+        profit_margin = t_info.get('profitMargins', 'N/A')
+        
+        pe_str = f"{pe_ratio:.2f}" if isinstance(pe_ratio, (int, float)) else "N/A"
+        pb_str = f"{pb_ratio:.2f}" if isinstance(pb_ratio, (int, float)) else "N/A"
+        pm_str = f"%{profit_margin*100:.1f}" if isinstance(profit_margin, (int, float)) else "N/A"
+    except Exception:
+        pe_str, pb_str, pm_str = "N/A", "N/A", "N/A"
 
     ann_vol = hist_ret.iloc[-126:].std() * np.sqrt(252)
     daily_drift = hist_ret.iloc[-126:].mean()
@@ -251,9 +271,12 @@ for ticker in tickers:
         target_price = current_price * np.exp(expected_drift)
         pct_change = ((target_price - current_price) / current_price) * 100
 
-        if pct_change > 4 and news_risk < 65 and rsi_val < 65:
+        # Sinyal Üretimine Hacim ve BIST 100 Göreli Güç Entegrasyonu
+        if pct_change > 4 and news_risk < 65 and rsi_val < 65 and rvol > 1.0 and relative_strength > 0:
+            sig = "GÜÇLÜ AL 🟢🟢"
+        elif pct_change > 3 and news_risk < 65 and rsi_val < 65:
             sig = "AL 🟢"
-        elif pct_change < -3 or news_risk > 70 or rsi_val > 70:
+        elif pct_change < -3 or news_risk > 70 or rsi_val > 70 or (rvol < 0.7 and relative_strength < -0.05):
             sig = "SAT 🔴"
         else:
             sig = "TUT 🟡"
@@ -265,9 +288,22 @@ for ticker in tickers:
             "Sinyal": sig
         })
 
-    # Hisselerin Açılır Kart Yapısı (Hem Mobil Hem Web Uyumlu)
+    # Etiket Renklendirmeleri
+    rvol_status = f"🟢 Yüksek Hacim (RVOL: {rvol:.2f})" if rvol >= 1.25 else f"🟡 Normal Hacim (RVOL: {rvol:.2f})"
+    rs_status = f"🟢 BIST 100'den Güçlü (%{relative_strength*100:+.1f})" if relative_strength > 0 else f"🔴 BIST 100'den Zayıf (%{relative_strength*100:+.1f})"
+
     with st.expander(f"📌 {clean_symbol} | Fiyat: {current_price:.2f} TL | RSI: {rsi_val:.1f}", expanded=False):
-        # Web & Mobil Uyumlu Özel Tablo Gösterimi
+        # Bilanço ve Kuantitatif Gösterge Rozetleri
+        st.markdown(f"""
+        <div style="margin-bottom:12px;">
+            <span class="fund-badge">📑 F/K: <strong>{pe_str}</strong></span>
+            <span class="fund-badge">📑 PD/DD: <strong>{pb_str}</strong></span>
+            <span class="fund-badge">💰 Kâr Marjı: <strong>{pm_str}</strong></span>
+            <span class="fund-badge">📊 {rvol_status}</span>
+            <span class="fund-badge">⚖️ {rs_status}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
         st.dataframe(
             pd.DataFrame(tf_data), 
             use_container_width=True, 
