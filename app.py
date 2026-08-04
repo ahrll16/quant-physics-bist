@@ -68,6 +68,7 @@ def compute_rsi(series, window=14):
 
 @st.cache_data(ttl=1800)
 @st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800)
 def fetch_and_analyze_news_live():
     rss_urls = [
         "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en",
@@ -90,7 +91,7 @@ def fetch_and_analyze_news_live():
 
     api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
     if not api_key:
-        return 50.0, "<p>⚠️ GEMINI_API_KEY Streamlit Secrets alanına tanımlanmadı.</p>"
+        return 50.0, "<p>⚠️ GEMINI_API_KEY Streamlit Secrets alanında bulunamadı.</p>"
 
     all_titles_text = "\n".join([f"- {t}" for t in raw_titles])
 
@@ -105,8 +106,10 @@ def fetch_and_analyze_news_live():
     3. Sayfanın en son satırına 'RISK_SCORE: [sayı]' yaz (0-100 arası).
     """
 
-    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-    
+    # google-genai SDK için güncel ve desteklenen model tanımları
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.5-pro']
+    last_error = ""
+
     for model_name in models_to_try:
         try:
             client = genai.Client(api_key=api_key)
@@ -126,7 +129,7 @@ def fetch_and_analyze_news_live():
                 return score, output_text
             return 50.0, output
         except Exception as e:
-            last_error = e
+            last_error = str(e)
             continue
 
     return 50.0, f"<p>Piyasa analiz servisi yanıt vermedi. Detay: {last_error}</p>"
