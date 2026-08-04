@@ -11,24 +11,23 @@ try:
 except ImportError:
     genai = None
 
-# Streamlit Konfigürasyonu
+# Streamlit Sayfa Ayarları
 st.set_page_config(
     page_title="Quant Physics BIST Terminal",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Sabit Dark Mode CSS (Kullanıcı ışıklı moda geçemez)
+# Mobil Uyumlu ve Sabit Koyu Tema CSS
 st.markdown("""
 <style>
-    /* Ana Arka Plan ve Yazı Rengi */
+    /* Global Koyu Tema */
     html, body, [data-testid="stAppViewContainer"] {
         background-color: #0f172a !important;
         color: #f8fafc !important;
     }
     
-    /* Yan Menü (Sidebar) Siyah Tema */
     [data-testid="stSidebar"] {
         background-color: #020617 !important;
     }
@@ -36,46 +35,61 @@ st.markdown("""
     /* Metrik Kutuları */
     .stMetric { 
         background-color: #1e293b !important; 
-        padding: 15px; 
+        padding: 12px; 
         border-radius: 8px; 
         border: 1px solid #334155 !important; 
+        margin-bottom: 10px;
     }
     
-    /* Haber ve Yasal Uyarı Kutuları */
+    /* Mobil & Web İçin Özel Kutular */
     .disclaimer-box { 
         background-color: #1e1b4b !important; 
         border: 1px solid #4338ca !important; 
         border-radius: 8px; 
         padding: 12px; 
-        margin-bottom: 20px; 
+        margin-bottom: 15px; 
         color: #cbd5e1 !important; 
-        font-size: 13px; 
+        font-size: 12px; 
+        line-height: 1.4;
     }
     
     .news-box { 
         background-color: #1e293b !important; 
         border: 1px solid #334155 !important; 
         border-radius: 8px; 
-        padding: 18px; 
-        margin-bottom: 20px; 
-        font-size: 14px; 
-        line-height: 1.6; 
+        padding: 15px; 
+        margin-bottom: 15px; 
+        font-size: 13px; 
+        line-height: 1.5; 
         color: #f8fafc !important;
+        overflow-x: auto;
+    }
+
+    /* Tablo ve Kart Düzenleri */
+    .timeframe-card {
+        background-color: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+    }
+
+    /* Mobil Ekran Özelleştirmeleri (Media Query) */
+    @media (max-width: 768px) {
+        .stMetric { padding: 10px; }
+        .stMetric [data-testid="stMetricValue"] { font-size: 1.3rem !important; }
+        h1 { font-size: 1.5rem !important; }
+        h2 { font-size: 1.2rem !important; }
+        h3 { font-size: 1.1rem !important; }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Kurumsal Finans Terminali CSS
-st.markdown("""
-<style>
-    .main { background-color: #0b0f19; color: #f1f5f9; }
-    .stMetric { background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
-    .disclaimer-box { background-color: #1e1b4b; border: 1px solid #4338ca; border-radius: 8px; padding: 12px; margin-bottom: 20px; color: #cbd5e1; font-size: 13px; }
-    .news-box { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 18px; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
-</style>
-""", unsafe_allow_html=True)
-
-# Yasal Uyarı Metni
+# Yasal Uyarı
 st.markdown("""
 <div class="disclaimer-box">
     <strong>⚖️ YASAL UYARI:</strong> Bu web sitesinde sunulan duygu analizleri, makine öğrenimi tahminleri ve kuantitatif veriler 
@@ -83,9 +97,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.title("📊 BIST Terminali")
+st.title("BIST Terminali")
 
-# Sektörler ve Hisseler (A-Z Alfabetik Düzenleme)
+# Sektörler ve Hisseler (A-Z Alfabetik Sıralı)
 RAW_STOCK_CATEGORIES = {
     'BANKACILIK & FİNANS': ['AKBNK.IS', 'GARAN.IS', 'HALKB.IS', 'ISCTR.IS', 'TSKB.IS', 'VAKBN.IS', 'YKBNK.IS'],
     'ENERJİ & MADENCİLİK': ['AKSEN.IS', 'ASTOR.IS', 'CWENE.IS', 'ENJSA.IS', 'EUPWR.IS', 'GESAN.IS', 'PETKM.IS', 'TUPRS.IS'],
@@ -98,7 +112,6 @@ RAW_STOCK_CATEGORIES = {
     'SAVUNMA & TEKNOLOJİ': ['ASELS.IS', 'KONTR.IS', 'MIATK.IS', 'REEDR.IS', 'SDTTR.IS']
 }
 
-# A-Z Alfabetik Sıralanmış Sektörler ve Hisseler
 STOCK_CATEGORIES = {
     cat: sorted(RAW_STOCK_CATEGORIES[cat]) 
     for cat in sorted(RAW_STOCK_CATEGORIES.keys())
@@ -112,9 +125,6 @@ def compute_rsi(series, window=14):
     return 100 - (100 / (1 + rs))
 
 @st.cache_data(ttl=1800)
-@st.cache_data(ttl=1800)
-@st.cache_data(ttl=1800)
-@st.cache_data(ttl=1800) # 30 dakika boyunca önbellekte tutar, ücretsiz API kotasını korur
 def fetch_and_analyze_news_live():
     rss_urls = [
         "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en",
@@ -137,7 +147,7 @@ def fetch_and_analyze_news_live():
 
     api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
     if not api_key:
-        return 50.0, "<p>⚠️ GEMINI_API_KEY tanımlanmadı.</p>"
+        return 50.0, "<p>⚠️ GEMINI_API_KEY bulunamadı.</p>"
 
     all_titles_text = "\n".join([f"- {t}" for t in raw_titles])
 
@@ -152,7 +162,6 @@ def fetch_and_analyze_news_live():
     3. Sayfanın en son satırına 'RISK_SCORE: [sayı]' yaz (0-100 arası).
     """
 
-    # Yalnızca %100 Ücretsiz Katman Destekli Hızlı Flash Modeli
     try:
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
@@ -171,7 +180,6 @@ def fetch_and_analyze_news_live():
             return score, output_text
         return 50.0, output
     except Exception:
-        # Ücretsiz kota anlık aşılırsa çökme yapmaz, canlı haber listesini basar
         fallback_html = "<ul>" + "".join([f"<li>🟡 {t}</li>" for t in raw_titles[:6]]) + "</ul>"
         return 50.0, f"<p><em>⚠️ Canlı Akış Haber Başlıkları:</em></p>{fallback_html}"
 
@@ -182,27 +190,29 @@ if st.sidebar.button("🔄 Piyasayı & Haberleri Yenile"):
 
 news_risk, news_analysis_html = fetch_and_analyze_news_live()
 
-# Üst Metrik Kartları ve Kısa Açıklamaları
+# Üst Metrik Kartları
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric("🧠 Makro Haber Risk Skoru", f"%{news_risk:.1f}")
-    st.caption("Piyasa haberlerinin yapay zeka tarafından hesaplanan genel risk ve duygu seviyesidir.")
+    st.metric("🧠 Makro Risk Skoru", f"%{news_risk:.1f}")
+    st.caption("Piyasa haberlerinin hesaplanan risk seviyesi.")
 
 with col2:
-    st.metric("📊 Önerilen Hisse Ağırlığı", f"%{100.0 - news_risk:.1f}")
-    st.caption("Mevcut makro risk seviyesine göre portföyde tutulması önerilen toplam hisse oranıdır.")
+    st.metric("📊 Hisse Ağırlığı", f"%{100.0 - news_risk:.1f}")
+    st.caption("Portföyde tutulması önerilen hisse oranı.")
 
 with col3:
-    st.metric("💵 Önerilen Nakit Ağırlığı", f"%{news_risk:.1f}")
-    st.caption("Olası dalgalanmalardan korunmak ve fırsat kollamak için önerilen nakit/likit oranını simgeler.")
+    st.metric("💵 Nakit Ağırlığı", f"%{news_risk:.1f}")
+    st.caption("Piyasa riskine karşı önerilen nakit oranı.")
+
+st.markdown("---")
 
 # Haber Analizi Sekmesi
 st.subheader("🌍 Canlı Küresel & Yerel Piyasa Haber Analizi")
 st.markdown(f'<div class="news-box">{news_analysis_html}</div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.subheader("🏢 Sektörel Hisse Analizleri ve Çoklu Zaman Dilimi Hedefleri")
+st.subheader("🏢 Sektörel Hisse Analizleri ve Hedefler")
 
 selected_cat = st.selectbox("İncelemek İstediğiniz Sektörü Seçin (A-Z):", list(STOCK_CATEGORIES.keys()))
 
@@ -242,19 +252,24 @@ for ticker in tickers:
         pct_change = ((target_price - current_price) / current_price) * 100
 
         if pct_change > 4 and news_risk < 65 and rsi_val < 65:
-            sig = "AL / Yüksek Potansiyel 🟢"
+            sig = "AL 🟢"
         elif pct_change < -3 or news_risk > 70 or rsi_val > 70:
-            sig = "SAT / Riskli & Nakit 🔴"
+            sig = "SAT 🔴"
         else:
-            sig = "TUT / Dengeli Pozisyon 🟡"
+            sig = "TUT 🟡"
 
         tf_data.append({
             "Zaman Dilimi": tf_name,
             "Beklenen Oynaklık": f"%{vol_period:.2f}",
             "Tahmini Fiyat (% Hedef)": f"{target_price:.2f} TL ({pct_change:+.2f}%)",
-            "Tazelenmiş Sinyal": sig,
-            "Sistem Notu": "Akış Düzeltmeli"
+            "Sinyal": sig
         })
 
-    with st.expander(f"📌 {clean_symbol} | Fiyat: {current_price:.2f} TL | RSI: {rsi_val:.1f}", expanded=True):
-        st.table(pd.DataFrame(tf_data))
+    # Hisselerin Açılır Kart Yapısı (Hem Mobil Hem Web Uyumlu)
+    with st.expander(f"📌 {clean_symbol} | Fiyat: {current_price:.2f} TL | RSI: {rsi_val:.1f}", expanded=False):
+        # Web & Mobil Uyumlu Özel Tablo Gösterimi
+        st.dataframe(
+            pd.DataFrame(tf_data), 
+            use_container_width=True, 
+            hide_index=True
+        )
