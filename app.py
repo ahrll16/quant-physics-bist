@@ -13,7 +13,7 @@ except ImportError:
 
 # Streamlit Konfigürasyonu
 st.set_page_config(
-    page_title="Quant Physics BIST Terminal",
+    page_title="BIST Terminal",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -67,6 +67,7 @@ def compute_rsi(series, window=14):
     return 100 - (100 / (1 + rs))
 
 @st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800)
 def fetch_and_analyze_news_live():
     rss_urls = [
         "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en",
@@ -87,9 +88,9 @@ def fetch_and_analyze_news_live():
         except Exception:
             pass
 
-    api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
-    if not api_key or not genai:
-        return 50.0, "<p>Piyasa veri entegrasyonu aktif değil.</p>"
+    api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
+    if not api_key:
+        return 50.0, "<p>⚠️ GEMINI_API_KEY Streamlit Secrets alanına tanımlanmadı.</p>"
 
     all_titles_text = "\n".join([f"- {t}" for t in raw_titles])
 
@@ -104,7 +105,9 @@ def fetch_and_analyze_news_live():
     3. Sayfanın en son satırına 'RISK_SCORE: [sayı]' yaz (0-100 arası).
     """
 
-    for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash']:
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+    
+    for model_name in models_to_try:
         try:
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
@@ -122,10 +125,11 @@ def fetch_and_analyze_news_live():
                     score = 50.0
                 return score, output_text
             return 50.0, output
-        except Exception:
+        except Exception as e:
+            last_error = e
             continue
 
-    return 50.0, "<p>Piyasa analiz servisi yanıt vermedi.</p>"
+    return 50.0, f"<p>Piyasa analiz servisi yanıt vermedi. Detay: {last_error}</p>"
 
 # Yan Menü
 st.sidebar.header("⚙️ Terminal Kontrolü")
