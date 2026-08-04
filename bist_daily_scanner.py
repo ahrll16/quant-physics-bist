@@ -55,15 +55,24 @@ def compute_rsi(series, window=14):
 
 def fetch_and_analyze_news_with_ai():
     """
-    Günün geniş finans/ekonomi haber akışını toplar ve Gemini AI ile süzerek
-    BIST 100'e doğrudan etkisi olan kritik haberleri ve piyasa risk skorunu üretir.
+    Hem KÜRESEL (Global Financial Markets, FED, Oil, US Markets, Geopolitics) 
+    hem de YEREL (BIST 100, TCMB, KAP, Makro) haber akışını küresel RSS kaynaklarından toplar
+    ve Gemini AI süzgeci ile BIST 100 üzerindeki etkilerini analiz eder.
     """
-    print("🌍 Gün İçi Haber Akışı Toplanıyor & Yapay Zeka (Gemini) Süzgecinden Geçiriliyor...")
+    print("🌍 Küresel ve Yerel Haber Akışları Toplanıyor & Gemini AI ile Analiz Ediliyor...")
 
+    # KÜRESEL + YEREL GENİŞ HABER HAVUZU (Google News Global, Reuters, CNBC, World Business)
     rss_urls = [
-        "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=tr&gl=TR&ceid=TR:tr",
-        "https://news.google.com/rss/search?q=ekonomi+resmi+gazete+bursa+sanayi+bist+merkez+bankasi+when:1d&hl=tr&gl=TR&ceid=TR:tr",
-        "https://news.google.com/rss/search?q=BofA+yabanci+takas+hisse+faiz+dolar+when:1d&hl=tr&gl=TR&ceid=TR:tr"
+        # 1. KÜRESEL FİNANS & EKONOMİ (Global Business - English)
+        "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en",
+        # 2. KÜRESEL PİYASALAR & EMPATİ & ENERJİ (Global Markets, Fed, Oil, Geopolitics)
+        "https://news.google.com/rss/search?q=global+markets+OR+Federal+Reserve+OR+oil+prices+OR+OPEC+OR+stock+market+when:1d&hl=en-US&gl=US&ceid=US:en",
+        # 3. KÜRESEL JEOPOLİTİK & EMPATİ (Global Geopolitics & War/Trade)
+        "https://news.google.com/rss/search?q=US+economy+OR+tariffs+OR+geopolitics+OR+China+trade+when:1d&hl=en-US&gl=US&ceid=US:en",
+        # 4. YEREL BIST 100 & TÜRKİYE MAKRO (BIST, TCMB, Faiz, Dolar, Şirketler)
+        "https://news.google.com/rss/search?q=BIST+100+OR+Borsa+Istanbul+OR+Merkez+Bankasi+OR+enflasyon+when:1d&hl=tr&gl=TR&ceid=TR:tr",
+        # 5. YABANCI AKIŞLARI & BOFA / JPMORGAN (Institutional Flows & Turkey Credit)
+        "https://news.google.com/rss/search?q=BofA+OR+JPMorgan+OR+Turkey+economy+OR+foreign+investors+when:1d&hl=en-US&gl=US&ceid=US:en"
     ]
 
     raw_titles = []
@@ -72,7 +81,7 @@ def fetch_and_analyze_news_with_ai():
             resp = requests.get(url, timeout=10)
             if resp.status_code == 200:
                 root = ET.fromstring(resp.content)
-                for item in root.findall('.//item')[:15]:
+                for item in root.findall('.//item')[:10]: # Her kanaldan ilk 10 başlığı al
                     title_text = item.find('title').text
                     if title_text and title_text not in raw_titles:
                         raw_titles.append(title_text)
@@ -84,26 +93,27 @@ def fetch_and_analyze_news_with_ai():
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key or not genai:
-        print("⚠️ GEMINI_API_KEY bulunamadı veya google-genai kütüphanesi eksik. Varsayılan duygu skoru kullanılacak.")
+        print("⚠️ GEMINI_API_KEY bulunamadı veya google-genai kütüphanesi eksik.")
         headlines_summary = "".join([f"<li>{t}</li>" for t in raw_titles[:6]])
         return 50.0, f"<ul>{headlines_summary}</ul>"
 
     all_titles_text = "\n".join([f"- {t}" for t in raw_titles])
 
     prompt = f"""
-    Sen BIST 100 ve Türkiye Piyasaları Uzmanı bir Quantitative Analyst'sin.
-    Aşağıda bugün piyasalardan çekilen ham haber başlıkları yer alıyor:
+    Sen BIST 100 ve Küresel Piyasalar Baş Analistisin (Global Macro Quant Analyst).
+    Aşağıda dünya genelinden (ABD, Avrupa, Asya, Brent Petrol, FED, Jeopolitik) ve Türkiye iç piyasasından toplanan SON 24 SAATİN canlı haber başlıkları bulunmaktadır:
 
-    --- HABER BAŞLIKLARI ---
+    --- KÜRESEL VE YEREL HABER BAŞLIKLARI ---
     {all_titles_text}
-    ------------------------
+    ----------------------------------------
 
     GÖREVİN:
-    1. Bu başlıkları incele. Borsa İstanbul'u (BIST 100), makroekonomiyi, döviz/emtia dengesini veya BIST şirketlerini DOĞRUDAN ETKİLEMEYECEK haberleri ele (Magazin, genel siyasi laf kalabalığı, önemsiz şirket içi detaylar elensin).
-    2. BIST'i olumlu, olumsuz veya nötr etkileyebilecek EN KRİTİK 4 ila 7 haberi seç.
-    3. Seçtiğin her haber için HTML <li> etiketleri içinde şu formatta çıktı üret:
-       <li><strong>[POZİTİF 🟢 / NEGATİF 🔴 / NÖTR 🟡] Haber Başlığı:</strong> 1 cümlelik analist yorumu (BIST'i neden ve nasıl etkiler?).</li>
-    4. Sayfanın en son satırında, genel piyasa haber akışına göre BIST için 0-100 arasında bir Risk Skoru belirle (0 = Tamamen Pozitif/Risksiz, 100 = Aşırı Riskli/Negatif).
+    1. Bu başlıkları detaylıca incele. Küresel piyasaları, emtiaları (altın, petrol), makroekonomiyi VEYA doğrudan Borsa İstanbul'u (BIST 100) etkilemeyecek önemsiz haberleri ele.
+    2. Hem KÜRESEL hem YEREL gelişmeleri kapsayacak şekilde BIST 100 üzerindeki etkisi en yüksek olan **6 ila 10 kritik haberi** seç.
+    3. İngilizce gelen küresel haberleri Türkçeye çevirerek analiz et.
+    4. Seçtiğin her haber için HTML <li> etiketleri içinde tam olarak şu formatta çıktı üret:
+       <li><strong>[POZİTİF 🟢 / NEGATİF 🔴 / NÖTR 🟡] [Küresel / Yerel] Haber Başlığı Türkçe Özeti:</strong> 1-2 cümlelik analist yorumu (Bu gelişme BIST 100'ü, sektörleri veya dolar/faiz dengesini neden ve nasıl etkiler?).</li>
+    5. Sayfanın en son satırında, küresel ve yerel haber akışının BIST 100 üzerindeki toplam etkisine göre 0-100 arasında bir Risk Skoru belirle (0 = Tamamen Pozitif/Risksiz, 100 = Aşırı Riskli/Negatif).
        Format tam olarak şöyle olmalıdır:
        RISK_SCORE: [sayı]
 
