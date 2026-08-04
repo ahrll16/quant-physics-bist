@@ -13,11 +13,57 @@ except ImportError:
 
 # Streamlit Konfigürasyonu
 st.set_page_config(
-    page_title="BIST Terminal",
+    page_title="Quant Physics BIST Terminal",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Sabit Dark Mode CSS (Kullanıcı ışıklı moda geçemez)
+st.markdown("""
+<style>
+    /* Ana Arka Plan ve Yazı Rengi */
+    html, body, [data-testid="stAppViewContainer"] {
+        background-color: #0f172a !important;
+        color: #f8fafc !important;
+    }
+    
+    /* Yan Menü (Sidebar) Siyah Tema */
+    [data-testid="stSidebar"] {
+        background-color: #020617 !important;
+    }
+    
+    /* Metrik Kutuları */
+    .stMetric { 
+        background-color: #1e293b !important; 
+        padding: 15px; 
+        border-radius: 8px; 
+        border: 1px solid #334155 !important; 
+    }
+    
+    /* Haber ve Yasal Uyarı Kutuları */
+    .disclaimer-box { 
+        background-color: #1e1b4b !important; 
+        border: 1px solid #4338ca !important; 
+        border-radius: 8px; 
+        padding: 12px; 
+        margin-bottom: 20px; 
+        color: #cbd5e1 !important; 
+        font-size: 13px; 
+    }
+    
+    .news-box { 
+        background-color: #1e293b !important; 
+        border: 1px solid #334155 !important; 
+        border-radius: 8px; 
+        padding: 18px; 
+        margin-bottom: 20px; 
+        font-size: 14px; 
+        line-height: 1.6; 
+        color: #f8fafc !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Kurumsal Finans Terminali CSS
 st.markdown("""
