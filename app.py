@@ -11,46 +11,52 @@ try:
 except ImportError:
     genai = None
 
-# Streamlit Sayfa Ayarları
+# Streamlit Konfigürasyonu
 st.set_page_config(
-    page_title="Quant BIST & Gemini AI Terminal",
-    page_icon="📈",
+    page_title="Quant Physics BIST Terminal",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Koyu Finans Terminali CSS
+# Kurumsal Finans Terminali CSS
 st.markdown("""
 <style>
-    .main { background-color: #0f172a; color: #f8fafc; }
+    .main { background-color: #0b0f19; color: #f1f5f9; }
     .stMetric { background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
     .disclaimer-box { background-color: #1e1b4b; border: 1px solid #4338ca; border-radius: 8px; padding: 12px; margin-bottom: 20px; color: #cbd5e1; font-size: 13px; }
     .news-box { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 18px; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
-    .stock-card { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; margin-top: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
-# Yasal Uyarı
+# Yasal Uyarı Metni
 st.markdown("""
 <div class="disclaimer-box">
-    <strong>⚖️ YASAL UYARI:</strong> Bu web sitesinde sunulan yapay zeka duygu analizleri, makine öğrenimi tahminleri ve kuantitatif veriler 
-    <strong>yatırım danışmanlığı kapsamında değildir.</strong> Yalnızca istatistiksel ve eğitim amaçlıdır.
+    <strong>⚖️ YASAL UYARI:</strong> Bu web sitesinde sunulan duygu analizleri, makine öğrenimi tahminleri ve kuantitatif veriler 
+    <strong>yatırım danışmanlığı kapsamında değildir.</strong> Yalnızca akademik, istatistiksel ve eğitim amaçlı kuantitatif modeller içerir.
 </div>
 """, unsafe_allow_html=True)
 
-st.title("📈 BIST 100 Quant Engine & Gemini AI Terminal")
-st.caption("Küresel Piyasalar, Asya/Avrupa Açılışları ve BIST 100 Canlı Yapay Zeka Analiz Paneli")
+st.title("📊 Quant Physics BIST Terminal")
+st.caption("Küresel Makro Veriler, Piyasa Duygu Analizi ve Kuantitatif Hisse Modellemesi")
 
-STOCK_CATEGORIES = {
+# Sektörler ve Hisseler (A-Z Alfabetik Düzenleme)
+RAW_STOCK_CATEGORIES = {
     'BANKACILIK & FİNANS': ['AKBNK.IS', 'GARAN.IS', 'HALKB.IS', 'ISCTR.IS', 'TSKB.IS', 'VAKBN.IS', 'YKBNK.IS'],
-    'HOLDİNG & YATIRIM': ['AGHOL.IS', 'ALARK.IS', 'DOHOL.IS', 'KCHOL.IS', 'SAHOL.IS', 'SISE.IS', 'TKFEN.IS'],
-    'HAVACILIK & LOJİSTİK': ['ENKAI.IS', 'PGSUS.IS', 'TAVHL.IS', 'THYAO.IS'],
-    'OTOMOTİV & SANAYİ': ['ARCLK.IS', 'BRISA.IS', 'DOAS.IS', 'FROTO.IS', 'OTKAR.IS', 'TOASO.IS', 'VESBE.IS'],
     'ENERJİ & MADENCİLİK': ['AKSEN.IS', 'ASTOR.IS', 'CWENE.IS', 'ENJSA.IS', 'EUPWR.IS', 'GESAN.IS', 'PETKM.IS', 'TUPRS.IS'],
-    'SAVUNMA & TEKNOLOJİ': ['ASELS.IS', 'KONTR.IS', 'MIATK.IS', 'REEDR.IS', 'SDTTR.IS'],
-    'PERAKENDE & GIDA': ['AEFES.IS', 'BIMAS.IS', 'CCOLA.IS', 'MGROS.IS', 'SOKM.IS', 'ULKER.IS'],
+    'HAVACILIK & LOJİSTİK': ['ENKAI.IS', 'PGSUS.IS', 'TAVHL.IS', 'THYAO.IS'],
+    'HOLDİNG & YATIRIM': ['AGHOL.IS', 'ALARK.IS', 'DOHOL.IS', 'KCHOL.IS', 'SAHOL.IS', 'SISE.IS', 'TKFEN.IS'],
+    'İLETİŞİM': ['TCELL.IS', 'TTKOM.IS'],
     'KİMYA & GAYRİMENKUL': ['ECILC.IS', 'EKGYO.IS', 'EREGL.IS', 'HEKTS.IS', 'KRDMD.IS', 'SASA.IS'],
-    'İLETİŞİM': ['TCELL.IS', 'TTKOM.IS']
+    'OTOMOTİV & SANAYİ': ['ARCLK.IS', 'BRISA.IS', 'DOAS.IS', 'FROTO.IS', 'OTKAR.IS', 'TOASO.IS', 'VESBE.IS'],
+    'PERAKENDE & GIDA': ['AEFES.IS', 'BIMAS.IS', 'CCOLA.IS', 'MGROS.IS', 'SOKM.IS', 'ULKER.IS'],
+    'SAVUNMA & TEKNOLOJİ': ['ASELS.IS', 'KONTR.IS', 'MIATK.IS', 'REEDR.IS', 'SDTTR.IS']
+}
+
+# A-Z Alfabetik Sıralanmış Sektörler ve Hisseler
+STOCK_CATEGORIES = {
+    cat: sorted(RAW_STOCK_CATEGORIES[cat]) 
+    for cat in sorted(RAW_STOCK_CATEGORIES.keys())
 }
 
 def compute_rsi(series, window=14):
@@ -83,7 +89,7 @@ def fetch_and_analyze_news_live():
 
     api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
     if not api_key or not genai:
-        return 50.0, "<p>Yapay Zeka API Anahtarı bulunamadı veya google-genai modülü eksik.</p>"
+        return 50.0, "<p>Piyasa veri entegrasyonu aktif değil.</p>"
 
     all_titles_text = "\n".join([f"- {t}" for t in raw_titles])
 
@@ -94,11 +100,10 @@ def fetch_and_analyze_news_live():
 
     GÖREVİN:
     1. BIST 100 üzerindeki etkisi en yüksek olan 5-8 kritik haberi seç.
-    2. Türkçe özet ile [POZİTİF 🟢 / NEGATİF 🔴 / NÖTR 🟡] etiketli HTML liste özetini üret (<ul> ve <li> kullanarak).
+    2. Türkçe teknik özet ile [POZİTİF 🟢 / NEGATİF 🔴 / NÖTR 🟡] etiketli HTML liste özetini üret (<ul> ve <li> kullanarak).
     3. Sayfanın en son satırına 'RISK_SCORE: [sayı]' yaz (0-100 arası).
     """
 
-    # Model ismi güncel 'gemini-1.5-flash' veya 'gemini-2.0-flash' olarak güncellendi
     for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash']:
         try:
             client = genai.Client(api_key=api_key)
@@ -120,33 +125,33 @@ def fetch_and_analyze_news_live():
         except Exception:
             continue
 
-    return 50.0, "<p>Yapay zeka analiz modeli yanıt vermedi.</p>"
+    return 50.0, "<p>Piyasa analiz servisi yanıt vermedi.</p>"
 
 # Yan Menü
-st.sidebar.header("⚙️ Terminal Ayarları")
-if st.sidebar.button("🔄 Piyasayı & Haberleri Canlı Yenile"):
+st.sidebar.header("⚙️ Terminal Kontrolü")
+if st.sidebar.button("🔄 Piyasayı & Haberleri Yenile"):
     st.cache_data.clear()
 
 news_risk, news_analysis_html = fetch_and_analyze_news_live()
 
 # Üst Metrik Kartları
 col1, col2, col3 = st.columns(3)
-col1.metric("🧠 Gemini AI Haber Risk Skoru", f"%{news_risk:.1f}")
+col1.metric("🧠 Makro Haber Risk Skoru", f"%{news_risk:.1f}")
 col2.metric("📊 Önerilen Hisse Ağırlığı", f"%{100.0 - news_risk:.1f}")
 col3.metric("💵 Önerilen Nakit Ağırlığı", f"%{news_risk:.1f}")
 
 st.markdown("---")
 
-# Haber Süzgeci Sekmesi (HTML Destekli)
-st.subheader("🌍 Gemini AI Süzgecinden Geçen Canlı Küresel & Yerel Haber Analizi")
+# Haber Analizi Sekmesi
+st.subheader("🌍 Canlı Küresel & Yerel Piyasa Haber Analizi")
 st.markdown(f'<div class="news-box">{news_analysis_html}</div>', unsafe_allow_html=True)
 
 st.markdown("---")
 st.subheader("🏢 Sektörel Hisse Analizleri ve Çoklu Zaman Dilimi Hedefleri")
 
-selected_cat = st.selectbox("İncelemek İstediğiniz Sektörü Seçin:", sorted(list(STOCK_CATEGORIES.keys())))
+selected_cat = st.selectbox("İncelemek İstediğiniz Sektörü Seçin (A-Z):", list(STOCK_CATEGORIES.keys()))
 
-tickers = sorted(STOCK_CATEGORIES[selected_cat])
+tickers = STOCK_CATEGORIES[selected_cat]
 df_bist = yf.download(tickers, period="300d")['Close'].ffill().bfill()
 log_returns = np.log(df_bist / df_bist.shift(1)).dropna()
 
@@ -193,9 +198,8 @@ for ticker in tickers:
             "Beklenen Oynaklık": f"%{vol_period:.2f}",
             "Tahmini Fiyat (% Hedef)": f"{target_price:.2f} TL ({pct_change:+.2f}%)",
             "Tazelenmiş Sinyal": sig,
-            "Sistem Notu": "AI Akış Düzeltmeli"
+            "Sistem Notu": "Akış Düzeltmeli"
         })
 
-    # Her hisse için detaylı kart ve e-postadaki gibi zengin tablo gösterimi
     with st.expander(f"📌 {clean_symbol} | Fiyat: {current_price:.2f} TL | RSI: {rsi_val:.1f}", expanded=True):
         st.table(pd.DataFrame(tf_data))
